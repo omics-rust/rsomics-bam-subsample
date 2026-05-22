@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use rsomics_common::{CommonFlags, Result, RsomicsError, Tool, ToolMeta};
+use rsomics_common::{CommonFlags, Result, Tool, ToolMeta};
 use rsomics_help::{Example, FlagSpec, HelpSpec, Origin, Section};
 
 use rsomics_bam_subsample::subsample_bam;
@@ -39,12 +39,15 @@ impl Tool for Cli {
     }
 
     fn execute(self) -> Result<()> {
-        let mut out: Box<dyn std::io::Write> = if self.output == "-" {
-            Box::new(std::io::stdout().lock())
-        } else {
-            Box::new(std::fs::File::create(&self.output).map_err(RsomicsError::Io)?)
-        };
-        let kept = subsample_bam(&self.input, &mut out, self.fraction, self.common.seed_rng())?;
+        let workers = std::num::NonZero::new(self.common.thread_count())
+            .unwrap_or(std::num::NonZero::<usize>::MIN);
+        let kept = subsample_bam(
+            &self.input,
+            &self.output,
+            self.fraction,
+            self.common.seed_rng(),
+            workers,
+        )?;
         if !self.common.quiet {
             eprintln!("{kept} records kept");
         }
